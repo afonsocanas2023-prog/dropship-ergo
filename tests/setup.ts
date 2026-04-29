@@ -1,0 +1,20 @@
+// Sets all env vars required by env.ts zod validation before any module loads.
+Object.assign(process.env, {
+  SHOPIFY_SHOP_DOMAIN:     'test.myshopify.com',
+  SHOPIFY_ACCESS_TOKEN:    'shpat_test',
+  SHOPIFY_WEBHOOK_SECRET:  'whsec_test',
+  GORGIAS_API_KEY:         'gorgias-key',
+  GORGIAS_WEBHOOK_SECRET:  'gorgias-secret',
+  KLAVIYO_API_KEY:         'klaviyo-key',
+  SLACK_WEBHOOK_URL:       'https://hooks.slack.com/test',
+  DSERS_API_KEY:           'dsers-key',
+  CJ_DROPSHIPPING_API_KEY: 'cj-key',
+  AUTODS_API_KEY:          'autods-key',
+  ANTHROPIC_API_KEY:       'sk-ant-test',
+  LOOP_RETURNS_API_KEY:    'loop-key',
+  REDIS_URL:               'redis://localhost:6379',
+  DATABASE_URL:            'postgresql://test:test@localhost/test',
+  REPORTS_API_KEY:         'reports-key',
+  PORT:                    '3000',
+  NODE_ENV:                'test',
+})

@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  PENDING
+  ROUTED_TO_SUPPLIER
+  NEEDS_MANUAL_REVIEW
+  FULFILLED
+  CANCELLED
+}
+
+enum StockEventAction {
+  UPDATED
+  PRODUCT_HIDDEN
+  PRODUCT_PUBLISHED
+}
+
+enum TicketCategory {
+  WHERE_IS_ORDER
+  CANCELLATION
+  PRODUCT_QUESTION
+  DAMAGE_CLAIM
+  RETURN_REQUEST
+  UNKNOWN
+}
+
+enum TicketStatus {
+  OPEN
+  ESCALATED
+  AUTO_CLOSED
+  CLOSED
+}
+
+enum ClassificationMethod {
+  KEYWORD
+  AI
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Customer {
+  id                String   @id @default(cuid())
+  shopifyCustomerId String   @unique
+  email             String
+  firstName         String?
+  lastName          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  orders         Order[]
+  supportTickets SupportTicket[]
+  revenueLogs    RevenueLog[]
+
+  @@index([email])
+  @@map("customers")
+}
+
+model Supplier {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  apiEndpoint String
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  primarySkuMappings SkuSupplierMap[]  @relation("PrimarySupplier")
+  backupSkuMappings  SkuSupplierMap[]  @relation("BackupSupplier")
+  stockCaches        StockCache[]
+  stockEvents        StockEvent[]
+  supplierDisputes   SupplierDispute[]
+
+  @@map("suppliers")
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  shopifyOrderId String      @unique
+  customerId     String?
+  status         OrderStatus @default(PENDING)
+  totalPrice     Decimal     @db.Decimal(10, 2)
+  currency       String      @default("USD")
+  trackingNumber String?
+  trackingUrl    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  customer         Customer?         @relation(fields: [customerId], references: [id])
+  orderItems       OrderItem[]
+  supportTickets   SupportTicket[]
+  supplierDisputes SupplierDispute[]
+  revenueLogs      RevenueLog[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String    @id @default(cuid())
+  orderId           String
+  shopifyLineItemId String    @unique
+  productTitle      String
+  variantTitle      String?
+  shopifyProductId  String
+  shopifyVariantId  String
+  quantity          Int
+  price             Decimal   @db.Decimal(10, 2)
+  supplierSku       String?
+  routedSupplierId  String?
+  routedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  order            Order             @relation(fields: [orderId], references: [id])
+  supplierDisputes SupplierDispute[]
+
+  @@index([orderId])
+  @@index([routedSupplierId])
+  @@index([shopifyProductId])
+  @@map("order_items")
+}
+
+model SkuSupplierMap {
+  id                 String  @id @default(cuid())
+  shopifyVariantId   String  @unique
+  shopifySku         String
+  shopifyProductId   String
+  primarySupplierId  String
+  primarySupplierSku String
+  backupSupplierId   String?
+  backupSupplierSku  String?
+  isActive           Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  primarySupplier Supplier  @relation("PrimarySupplier", fields: [primarySupplierId], references: [id])
+  backupSupplier  Supplier? @relation("BackupSupplier", fields: [backupSupplierId], references: [id])
+
+  @@index([primarySupplierId])
+  @@index([backupSupplierId])
+  @@index([shopifyProductId])
+  @@map("sku_supplier_map")
+}
+
+model StockCache {
+  id           String   @id @default(cuid())
+  supplierId   String
+  supplierSku  String
+  stockLevel   Int      @default(0)
+  lastSyncedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([supplierId, supplierSku])
+  @@map("stock_cache")
+}
+
+model StockEvent {
+  id               String           @id @default(cuid())
+  supplierId       String
+  supplierSku      String
+  previousStock    Int
+  newStock         Int
+  shopifyProductId String?
+  action           StockEventAction
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@index([supplierSku])
+  @@index([createdAt])
+  @@map("stock_events")
+}
+
+model SupportTicket {
+  id                   String                @id @default(cuid())
+  gorgiasTicketId      String                @unique
+  customerId           String?
+  orderId              String?
+  category             TicketCategory
+  status               TicketStatus          @default(OPEN)
+  classificationMethod ClassificationMethod?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  customer         Customer?         @relation(fields: [customerId], references: [id])
+  order            Order?            @relation(fields: [orderId], references: [id])
+  supplierDisputes SupplierDispute[]
+
+  @@index([customerId])
+  @@index([orderId])
+  @@index([category])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model SupplierDispute {
+  id              String        @id @default(cuid())
+  supportTicketId String
+  supplierId      String
+  orderId         String
+  orderItemId     String
+  status          DisputeStatus @default(OPEN)
+  description     String
+  attachments     Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  supportTicket SupportTicket @relation(fields: [supportTicketId], references: [id])
+  supplier      Supplier      @relation(fields: [supplierId], references: [id])
+  order         Order         @relation(fields: [orderId], references: [id])
+  orderItem     OrderItem     @relation(fields: [orderItemId], references: [id])
+
+  @@index([supportTicketId])
+  @@index([supplierId])
+  @@index([orderId])
+  @@index([orderItemId])
+  @@map("supplier_disputes")
+}
+
+model RevenueLog {
+  id             String   @id @default(cuid())
+  orderId        String
+  shopifyOrderId String
+  customerId     String?
+  totalPrice     Decimal  @db.Decimal(10, 2)
+  currency       String   @default("USD")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  order    Order     @relation(fields: [orderId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([orderId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("revenue_log")
+}
